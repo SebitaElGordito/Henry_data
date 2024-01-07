@@ -187,4 +187,195 @@ FROM (SELECT ProductID, LineTotal,
     ROW_NUMBER() OVER(PARTITION BY ProductID ORDER BY LineTotal DESC) AS RowDesc
     FROM SalesOrderDetail) Med
 WHERE RowAsc IN (RowDesc, RowDesc - 1, RowDesc + 1)
-GROUP BY ProductID
+GROUP BY ProductID;
+
+
+-- HW 3 M3 3 FT 20
+
+USE adventureworks;
+
+-- 1)
+
+-- SUBCONSULTA SUBQUERIE
+
+SELECT * FROM salesorderdetail; -- SalesOrderID  OrderQty
+SELECT * FROM salesorderheader; -- SalesOrderID  OrderDate  ShipMethodID  
+SELECT * FROM shipmethod; -- ShipMethodID Name
+
+-- Este query nos arroja los volumenes de compra por año y metodo de envio
+SELECT YEAR(sh.OrderDate) 'Año', sp.Name 'Metodo Envio', SUM(sd.OrderQty) 'Cantidad'
+FROM salesorderdetail sd JOIN salesorderheader sh
+								ON (sd.SalesOrderID = sh.SalesOrderID) 
+						JOIN shipmethod sp 
+								ON (sp.ShipMethodID = sh.ShipMethodID) 
+GROUP BY 1, 2
+ORDER BY 1, 2;
+
+-- Esta query nos arroja los volumenes de compra por año
+SELECT YEAR(sh.OrderDate) as 'Año', SUM(sd.OrderQty) 'CantidadTotalAño'
+FROM salesorderheader sh JOIN salesorderdetail sd
+							ON (sd.SalesOrderID = sh.SalesOrderID) 
+GROUP BY 1;
+
+
+SELECT YEAR(sh.OrderDate) 'Año', sp.Name 'Metodo Envio', SUM(sd.OrderQty) 'Cantidad', 
+		ROUND(SUM(sd.OrderQty) / t.CantidadTotalAño * 100 ,2) AS 'Porcentaje Total Año'
+FROM salesorderdetail sd JOIN salesorderheader sh
+								ON (sd.SalesOrderID = sh.SalesOrderID) 
+						JOIN shipmethod sp 
+								ON (sp.ShipMethodID = sh.ShipMethodID) 
+						JOIN (				SELECT YEAR(sh.OrderDate) as 'Año', SUM(sd.OrderQty) 'CantidadTotalAño'
+											FROM salesorderheader sh JOIN salesorderdetail sd
+																		ON (sd.SalesOrderID = sh.SalesOrderID) 
+											GROUP BY 1) t
+								ON (t.Año = YEAR(sh.OrderDate)) 
+							
+GROUP BY 1, 2,CantidadTotalAño
+ORDER BY 1, 2;
+-- 1.6 seg
+/*
+-- Error Code: 1055. Expression #4 of SELECT list is not in GROUP BY clause and contains nonaggregated column 't.CantidadTotalAño' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+SHOW VARIABLES LIKE 'sql_mode';-- 'sql_mode', 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+SET GLOBAL sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';*/
+
+SELECT 
+  YEAR(soh.OrderDate) AS año, 
+  SUM(sod.OrderQty) AS VolumenVentas, 
+  sm.Name AS MetodoEnvio, 
+  SUM(sod.OrderQty) / total * 100 AS PorcentajeTotal
+FROM 
+  salesorderdetail sod 
+JOIN 
+  salesorderheader soh ON sod.SalesOrderID = soh.SalesOrderID 
+JOIN 
+  shipmethod sm ON soh.ShipMethodID = sm.ShipMethodID 
+JOIN (
+  SELECT 
+    YEAR(OrderDate) AS año, 
+    SUM(OrderQty) AS total
+  FROM 
+    salesorderdetail sod 
+  JOIN 
+    salesorderheader soh ON sod.SalesOrderID = soh.SalesOrderID 
+  GROUP BY 
+    YEAR(OrderDate)
+) AS subconsulta ON YEAR(soh.OrderDate) = subconsulta.año
+GROUP BY 
+  YEAR(soh.OrderDate), MetodoEnvio, total
+ORDER BY 
+  año, MetodoEnvio;
+
+
+
+-- Funcion ventana
+
+SELECT Año, MetodoEnvio, Cantidad,
+	  Cantidad / SUM(Cantidad) OVER (PARTITION BY Año) * 100 'PorcentajeTotalAño'
+      
+FROM (SELECT YEAR(sh.OrderDate) 'Año', sp.Name 'MetodoEnvio', SUM(sd.OrderQty) 'Cantidad'
+	  FROM salesorderheader sh JOIN salesorderdetail sd 
+								ON (sh.SalesOrderID = sd.SalesOrderID) 
+						 JOIN shipmethod sp
+								ON (sp.ShipMethodID = sh.ShipMethodID) 
+				GROUP BY 1, 2
+				ORDER BY 1, 2) V
+; -- 0.59 seg
+
+-- 2)
+
+SELECT * FROM salesorderdetail; -- OrderQty  LineTotal  ProductID
+SELECT * FROM product; -- ProductID   ProductSubcategoryID
+SELECT * FROM productsubcategory; -- ProductSubcategoryID ProductCategoryID
+SELECT * FROM productcategory; -- ProductCategoryID
+
+-- Este query nos arroja el total de ventas y el volumen de compras por categoria
+SELECT pc.Name 'Categoria', SUM(sd.OrderQty) 'Cantidad', SUM(sd.LineTotal) 'TotalVenta'
+FROM salesorderdetail sd JOIN product p
+							ON (p.ProductID = sd.ProductID) 
+						 JOIN productsubcategory ps
+							ON (ps.ProductSubcategoryID = p.ProductSubcategoryID) 
+						 JOIN productcategory pc
+							ON (pc.ProductCategoryID = ps.ProductCategoryID) 
+GROUP BY 1
+ORDER BY 1
+;
+
+-- Este query nos trae los porcentajes sobre los totales
+SELECT Categoria, Cantidad,
+		Cantidad / SUM(Cantidad) OVER () * 100 'PorcentajeCantidad',
+        TotalVenta, 
+        TotalVenta / SUM(TotalVenta) OVER () * 100 'PorcentajeTotalVenta'
+FROM (SELECT pc.Name 'Categoria', SUM(sd.OrderQty) 'Cantidad', SUM(sd.LineTotal) 'TotalVenta'
+		FROM salesorderdetail sd JOIN product p
+							ON (p.ProductID = sd.ProductID) 
+						 JOIN productsubcategory ps
+							ON (ps.ProductSubcategoryID = p.ProductSubcategoryID) 
+						 JOIN productcategory pc
+							ON (pc.ProductCategoryID = ps.ProductCategoryID) 
+GROUP BY 1
+ORDER BY 1) V;
+
+
+-- 3)
+
+SELECT * FROM salesorderheader; -- SalesOrderID ShipToAddressID
+SELECT * FROM address; -- AddressID  SateProvinceID
+SELECT * FROM stateprovince; -- StateProvinceID  CountryRegionCode
+SELECT * FROM countryregion; -- CountryRegionCode Name
+SELECT * FROM salesorderdetail; -- SalesOrderID OrderQty  LineTotal
+
+-- Este query nos trae la cantidad de productos y el total de ventas por pais
+SELECT cr.Name 'Pais', SUM(sd.OrderQty) 'Cantidad', SUM(sd.LineTotal) 'TotalVenta'
+FROM salesorderdetail sd JOIN salesorderheader sh 
+							ON (sd.SalesOrderID = sh.SalesOrderID) 
+						 JOIN address a
+							ON (a.AddressID = sh.ShipToAddressID) 
+						 JOIN stateprovince sp
+							ON (a.StateProvinceID = sp.StateProvinceID) 
+						 JOIN countryregion cr
+							ON (cr.CountryRegionCode = sp.CountryRegionCode) 
+GROUP BY 1
+ORDER BY 1;
+
+-- Este queyr nos arroja los porcentajes que representan las cantidades y el totalventa, por pais, sobre el total
+SELECT Pais, Cantidad, TotalVenta,
+		ROUND(Cantidad / SUM(Cantidad) OVER () * 100 , 2) 'PorcentajeCantidad',
+        ROUND(TotalVenta / SUM(TotalVenta) OVER () * 100, 2) 'PorcentajeTotalVenta'
+	
+FROM (SELECT cr.Name 'Pais', SUM(sd.OrderQty) 'Cantidad', SUM(sd.LineTotal) 'TotalVenta'
+			FROM salesorderdetail sd JOIN salesorderheader sh 
+							ON (sd.SalesOrderID = sh.SalesOrderID) 
+						 JOIN address a
+							ON (a.AddressID = sh.ShipToAddressID) 
+						 JOIN stateprovince sp
+							ON (a.StateProvinceID = sp.StateProvinceID) 
+						 JOIN countryregion cr
+							ON (cr.CountryRegionCode = sp.CountryRegionCode) 
+		GROUP BY 1
+			ORDER BY 1)  V;
+            
+
+-- 4) FLOOR() CEILING()
+
+
+SELECT FLOOR(5.6); -- FLOOR() TOMA EL ENTERO MAS PROXIMO HACIA ABAJO
+SELECT CEILING(5.6);-- CEILING() TOMA EL ENTERO MAS PROXIMO HACIA ARRIBA
+
+SELECT LineTotal, ProductID FROM salesorderdetail; -- LineTotal ProductID 
+
+SELECT ProductID, AVG(LineTotal), Cnt, RowNum
+FROM (SELECT ProductID, LineTotal,
+		COUNT(*) OVER (PARTITION BY ProductID) Cnt, -- Cuenta la cantidad de productos existentes por ProductID
+        ROW_NUMBER() OVER (PARTITION BY ProductID ORDER BY LineTotal) RowNum -- Cuenta las filas que hay por PorductID 
+		FROM salesorderdetail) v
+WHERE 	(FLOOR(Cnt/2) = CEILING(Cnt/2) AND (RowNum = FLOOR(Cnt/2) OR RowNum = FLOOR(Cnt/2) + 1))
+	OR
+		(FLOOR(Cnt/2) <> CEILING(Cnt/2) AND RowNum = CEILING(Cnt/2))
+GROUP BY 1;
+
+
+SELECT ProductID, LineTotal,
+		COUNT(*) OVER (PARTITION BY ProductID) Cnt,
+        ROW_NUMBER() OVER (PARTITION BY ProductID ORDER BY LineTotal) RowNum
+		FROM salesorderdetail
+WHERE ProductID = 710;
