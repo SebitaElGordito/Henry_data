@@ -18,9 +18,9 @@ cursor = conexion.cursor()
 #Crear tabla con archivos excel o csv
 """
 Leer datos desde Excel
-df = pd.read_excel('ruta/a/tu/archivo.xlsx')
+dbExcel = pd.read_excel('ruta/a/tu/archivo.xlsx')
             o
-df = pd.read_csv('ruta/a/tu/archivo.csv')
+dbCsv = pd.read_csv('ruta/a/tu/archivo.csv')
 
 # Conexión a la base de datos
 conexion = pymysql.connect(
@@ -38,7 +38,7 @@ conexion = pymysql.connect(
 
 
 # Creación de una nueva tabla
-sql = "CREATE TABLE employees (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,branch_id BIGINT UNSIGNED,dni VARCHAR(20) UNIQUE,name VARCHAR(150),email VARCHAR(100),birth_date DATE,created_at TIMESTAMP NULL,updated_at TIMESTAMP NULL)"
+sql = "CREATE TABLE employees (id INT AUTO_INCREMENT PRIMARY KEY,branch_id INT,dni VARCHAR(20) UNIQUE,name VARCHAR(150),email VARCHAR(100),birth_date DATE,created_at TIMESTAMP NULL,updated_at TIMESTAMP NULL)"
 cursor.execute(sql)
 
 # commit para guardar los cambios
